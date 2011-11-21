@@ -31,6 +31,7 @@ my $dbh = DBI->connect("dbi:Pg:dbname=$dbname;host=$dbhost",$dblogin,$dbpassword
 
 my ($start_id, $end_id);
 my $bootstrap = '/openils/conf/opensrf_core.xml';
+$leaderfile = "$Bin/config/leaders.map";
 
 OpenSRF::System->bootstrap_client(config_file => $bootstrap);
 Fieldmapper->import(IDL => OpenSRF::Utils::SettingsClient->new->config_value("IDL"));
@@ -39,8 +40,9 @@ Fieldmapper->import(IDL => OpenSRF::Utils::SettingsClient->new->config_value("ID
 use OpenILS::Utils::CStoreEditor;
 OpenILS::Utils::CStoreEditor::init();
 
-$SAVE = 1;
-$leaderfile = "$Bin/config/leaders.map";
+# Control parameters
+$SAVE = 0;
+$DEBUG = 1;
 
 $file = $ARGV[0];
 $leader = $ARGV[1];
@@ -54,7 +56,6 @@ unless ($leader)
 
 # "Call number","100","245a ","245b","245c","260e","260f","260g","300","500","700","710","740"
 my @items = split(/\n/, $csv);
-#$final = 5;
 $final = $#items;
 push(@test, $items[0]);
 for ($k=0; $k<=$final; $k++)
@@ -64,7 +65,7 @@ for ($k=0; $k<=$final; $k++)
 
 foreach $item (@test)
 {
-   print "CSV $item\n";
+   print "CSV $item\n" if ($DEBUG);
    $item=~s/^\"|\"$//g;
    $item = decode('iso-8859-1', $item);
    my @fields = split(/\|/, $item);
@@ -119,14 +120,14 @@ foreach $item (@test)
 	    {
 	        my ($field, $subfield) = split(/\|/, $map{$i});
 	        $mapvalue=~s/^\s*\"\s*|\s*\"\s*$//g;
-	        print "$map{$i} => $mapvalue\n";
+	        print "$map{$i} => $mapvalue\n" if ($DEBUG);
 	        $title = $mapvalue if ($map{$i} eq '245|a');
 	        $author = $mapvalue if ($map{$i} eq '700|a');
 	        $holding = $mapvalue if ($field=~/call/i); 
 
 	        if ($field && $mapvalue && $field!~/call/i)
 	        {
-	            print "M $field $mapvalue\n";
+	            print "M $field $mapvalue\n" if ($DEBUG);
                     my $newfield = MARC::Field->new($field,'','',$subfield => $mapvalue);
                     $record->insert_fields_ordered($newfield);
 	        }
@@ -134,31 +135,33 @@ foreach $item (@test)
 	}
 
 	$xml = $record->as_xml_record();
-	print "Metadata: $title $author -$holding- Len:$itemlength\n";
-	print "Stored: $xml\n";
+	print "Metadata: $title $author -$holding- Len:$itemlength\n" if ($DEBUG);
+	print "Stored: $xml\n" if ($DEBUG);
 
 	if ($SAVE && $itemlength > 10)
 	{
             my $editor = OpenILS::Utils::CStoreEditor->new(xact=>1);
             my $record = OpenILS::Application::Cat::BibCommon->biblio_record_xml_import($editor, $xml); #, $source, $auto_tcn, 1, 1);
-            print "$record\n";
+            print "$record\n" if ($DEBUG);
             $status = $editor->commit();
 	
+	    # Adding holdings
 	    if ($status)
 	    {
+		# Retreive latest inserted ID
 		my $thisid = receive_id($dbh, $title, $author);
-		print "$thisid $thisbarcode\n";
+		print "$thisid $thisbarcode\n" if ($DEBUG);
+		# Store new holding for record with ID
 		add_holding($dbh, $thisid, $holding, $thisbarcode);
 	    }
 	}
    }
 
-#   print "$fields[0] $fields[1]\n";
 };
 
 sub add_holding
 {
-   my ($dbh, $id, $holding, $thisbarcode) = @_;
+   my ($dbh, $id, $holding, $thisbarcode, $DEBUG) = @_;
    my $barcode;
 
    return if (!$id || !$holding);
@@ -193,10 +196,11 @@ sub add_holding
 	$barcode = "$thisbarcode"."0";
    }
 
-   print "$call_id $barcode\n";
+   print "$call_id $barcode\n" if ($DEBUG);
    $barcode=~s/\"|\'//g;
    $dbh->do("insert into asset.copy (circ_lib, creator, call_number, editor, location, loan_duration, fine_level, barcode) values (4, 5, $call_id, 5, 105, 2, 2, $barcode)");
 
+   return $barcode;
 }
 
 sub check_barcode
