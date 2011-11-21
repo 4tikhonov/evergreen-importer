@@ -25,7 +25,7 @@ use OpenILS::Application::Cat::BibCommon;
 use DBI;
 
 MARC::Charset->assume_unicode(1);
-my %dbconfig = loadconfig("$Bin/db.config");
+my %dbconfig = loadconfig("$Bin/config/db.config");
 my ($dbname, $dbhost, $dblogin, $dbpassword) = ($dbconfig{dbname}, $dbconfig{dbhost}, $dbconfig{dblogin}, $dbconfig{dbpassword});
 my $dbh = DBI->connect("dbi:Pg:dbname=$dbname;host=$dbhost",$dblogin,$dbpassword,{AutoCommit=>1,RaiseError=>1,PrintError=>0});
 
@@ -41,7 +41,7 @@ use OpenILS::Utils::CStoreEditor;
 OpenILS::Utils::CStoreEditor::init();
 
 # Control parameters
-$SAVE = 0;
+$SAVE = 1;
 $DEBUG = 1;
 
 $file = $ARGV[0];
@@ -138,7 +138,7 @@ foreach $item (@test)
 	print "Metadata: $title $author -$holding- Len:$itemlength\n" if ($DEBUG);
 	print "Stored: $xml\n" if ($DEBUG);
 
-	if ($SAVE && $itemlength > 10)
+	if ($SAVE && $itemlength > 10 && $holding)
 	{
             my $editor = OpenILS::Utils::CStoreEditor->new(xact=>1);
             my $record = OpenILS::Application::Cat::BibCommon->biblio_record_xml_import($editor, $xml); #, $source, $auto_tcn, 1, 1);
@@ -227,14 +227,18 @@ sub receive_id
     my $sth = $dbh->prepare("$sqlquery");
     $sth->execute();
 
+    my $firstid;
     while (my ($id, $marc) = $sth->fetchrow_array())
     {
 	print "$id $marc\n";
+	$firstid = $id unless ($firstid);
 	$thisid = $id if ($marc=~/$title/);
 	$thisid = $id if ($marc=~/$author/);
 	last if ($thisid);
     };
 
+    $thisid = $firstid unless ($thisid);
+    print "[DEBUG] $thisid\n";
     return $thisid;
 }
 
