@@ -209,11 +209,17 @@ sub check_barcode
 
    my $sqlquery = "select barcode from asset.copy";
    $sqlquery.=" where barcode='$barcode'" if ($barcode);
-   $sqlquery.=" order by id desc limit 10";
+   $sqlquery.=" order by id desc limit 100";
    my $sth = $dbh->prepare("$sqlquery");
    $sth->execute();
 
-   my $barcodedb = $sth->fetchrow_array();
+   while (my $tmpbarcodedb = $sth->fetchrow_array())
+   {
+	if ($tmpbarcodedb!~/^3005/ && $tmpbarcode=~/^\d+$/)
+	{
+	    $barcodedb = $tmpbarcodedb unless ($barcodedb); 
+	}
+   };
 
    return $barcodedb;
 }
