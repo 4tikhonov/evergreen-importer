@@ -58,9 +58,13 @@ unless ($leader)
 my @items = split(/\n/, $csv);
 $final = $#items;
 push(@test, $items[0]);
+$true = 1;
 for ($k=0; $k<=$final; $k++)
 {
-   push(@test, $items[$k]);
+   if ($true)
+   {
+      push(@test, $items[$k]);
+   };
 }
 
 foreach $item (@test)
@@ -238,8 +242,11 @@ sub receive_id
     {
 	print "$id $marc\n";
 	$firstid = $id unless ($firstid);
-	$thisid = $id if ($marc=~/$title/);
-	$thisid = $id if ($marc=~/$author/);
+	if ($title!~/\(/)
+	{
+	   $thisid = $id if ($marc=~/$title/);
+	   $thisid = $id if ($marc=~/$author/);
+	};
 	last if ($thisid);
     };
 
